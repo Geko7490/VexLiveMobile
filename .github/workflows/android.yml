@@ -25,7 +25,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Bundle pinned Three.js engine
+        run: |
+          npm pack three@0.160.1 --pack-destination /tmp
+          tar -xOf /tmp/three-0.160.1.tgz package/build/three.module.js > app/src/main/assets/three.module.js
+          tar -xOf /tmp/three-0.160.1.tgz package/LICENSE > app/src/main/assets/THREE-LICENSE.txt
       - run: node --check app/src/main/assets/game.js
+      - run: node --check app/src/main/assets/soundtrack.js
+      - run: node --input-type=module --check < app/src/main/assets/studio3d.js
       - run: node --check bridge/server.js
       - run: gradle :app:assembleDebug --no-daemon --stacktrace
       - run: cp app/build/outputs/apk/debug/app-debug.apk VexLiveMobile.apk
@@ -37,5 +44,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.0.0-alpha >/dev/null 2>&1 || gh release create v1.0.0-alpha --title "VEX Live Mobile 1.0 Alpha" --notes "Experimental debug build; live access requires configuration." --prerelease
-          gh release upload v1.0.0-alpha VexLiveMobile.apk --clobber
+          gh release view v1.1.0-alpha >/dev/null 2>&1 || gh release create v1.1.0-alpha --title "VEX Live Mobile 1.1 Studio Alpha" --notes "Experimental debug build; live access requires configuration." --prerelease
+          gh release upload v1.1.0-alpha VexLiveMobile.apk --clobber

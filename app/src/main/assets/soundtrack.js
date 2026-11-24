@@ -1,0 +1,26 @@
+/* Original VEX compositions: scheduled Web Audio synthesis, no sampled commercial music. */
+(()=>{
+const $=id=>document.getElementById(id);
+const tracks=[
+{bpm:116,steps:18,mode:[0,2,3,5,7,8,10],root:62,lead:[0,1,2,3,2,1,0,-1,4,3,2,1,0,1,2,3,1,-1],bass:[0,0,3,4],name:"Anadolu Şenliği",voice:"reed"},
+{bpm:102,steps:16,mode:[0,2,3,5,7,8,10],root:57,lead:[0,-1,2,-1,4,3,-1,2,0,-1,5,4,2,-1,1,-1],bass:[0,5,3,4],name:"Crystal Depths",voice:"pluck"},
+{bpm:138,steps:16,mode:[0,2,3,5,7,8,10],root:55,lead:[0,0,4,-1,3,2,0,-1,5,4,3,-1,2,1,0,-1],bass:[0,3,5,4],name:"Arena Pulse",voice:"saw"},
+{bpm:92,steps:16,mode:[0,2,4,5,7,9,11],root:60,lead:[0,2,4,-1,5,4,2,-1,3,4,6,-1,5,2,1,-1],bass:[0,4,5,3],name:"New Horizons",voice:"pluck"},
+{bpm:148,steps:16,mode:[0,2,3,5,7,8,10],root:59,lead:[0,-1,4,0,5,-1,4,2,3,-1,6,3,4,2,1,-1],bass:[0,5,3,4],name:"Neon Velocity",voice:"saw"}];
+let ctx,master,bus,delay,noise,clock,playing=false,current=0,next=0,step=0,selectedGame=0;
+const hz=n=>440*Math.pow(2,(n-69)/12);
+const note=(tr,d,oct=0)=>tr.root+tr.mode[((d%7)+7)%7]+12*(Math.floor(d/7)+oct);
+function init(){if(ctx)return;ctx=new (window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();bus=ctx.createDynamicsCompressor();bus.threshold.value=-16;bus.ratio.value=3;bus.connect(master).connect(ctx.destination);delay=ctx.createDelay(1);delay.delayTime.value=.24;let wet=ctx.createGain(),feedback=ctx.createGain();wet.gain.value=.12;feedback.gain.value=.22;delay.connect(wet).connect(bus);delay.connect(feedback).connect(delay);noise=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);let d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;vol();}
+function vol(){if(master)master.gain.setTargetAtTime(Number($("volume").value)/100*.75,ctx.currentTime,.04);$("audio").volume=Number($("volume").value)/100;}
+function tone(n,t,d,v,kind="pluck",pan=0){const f=hz(n),g=ctx.createGain(),filter=ctx.createBiquadFilter();filter.type="lowpass";filter.frequency.setValueAtTime(kind==="reed"?2800:kind==="saw"?1600:2400,t);filter.frequency.exponentialRampToValueAtTime(kind==="reed"?1300:450,t+d);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.018);g.gain.exponentialRampToValueAtTime(.0001,t+d);let p=ctx.createStereoPanner();p.pan.value=pan;filter.connect(g).connect(p).connect(bus);if(kind!=="bass")p.connect(delay);let types=kind==="reed"?["sawtooth","triangle"]:kind==="saw"?["sawtooth","square"]:kind==="pad"?["sine","triangle"]:["triangle","sine"];types.forEach((type,i)=>{let o=ctx.createOscillator(),a=ctx.createGain();o.type=type;o.frequency.value=f*(i===1&&kind==="pluck"?2:1);o.detune.value=i?5:-3;a.gain.value=i?.24:.76;o.connect(a).connect(filter);o.start(t);o.stop(t+d+.02);});}
+function drum(t,k,v){let g=ctx.createGain();g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+(k===0?.24:k===1?.13:.055));g.connect(bus);if(k===0){let o=ctx.createOscillator();o.frequency.setValueAtTime(145,t);o.frequency.exponentialRampToValueAtTime(42,t+.19);o.connect(g);o.start(t);o.stop(t+.25);}else{let n=ctx.createBufferSource(),f=ctx.createBiquadFilter();n.buffer=noise;f.type=k===1?"bandpass":"highpass";f.frequency.value=k===1?1700:7800;n.connect(f).connect(g);n.start(t);n.stop(t+(k===1?.14:.06));}}
+function schedule(t,i){let tr=tracks[current],s=i%tr.steps,bar=Math.floor(i/tr.steps),root=tr.bass[bar%4],span=60/tr.bpm/4,folk=current===0;let accents=folk?[0,4,8,12,16]:[0,8];if(accents.includes(s))drum(t,0,.35);if((folk?[2,6,10,14,17]:[4,12]).includes(s))drum(t,1,.15);if(s%2===0||current===4)drum(t,2,s%4===0?.04:.075);
+if(s%4===0||folk&&s===16)tone(note(tr,root,-2),t,span*3.2,.23,"bass");
+if(s===0){[root,root+2,root+4].forEach((n,j)=>tone(note(tr,n,-1),t,span*(tr.steps-1),.045,"pad",(j-1)*.45));}
+let melody=tr.lead[s];if(melody>=0){let degree=melody+(bar%4===2?2:0);tone(note(tr,degree),t,span*(folk?1.7:2.2),.105,tr.voice,-.15);if(s%4===0)tone(note(tr,degree+2,1),t+.035,span*1.6,.028,"pluck",.55);}
+if(s%4===2)tone(note(tr,root+4,1),t,span*.8,.045,"pluck",.45);}
+function tick(){if(!playing||!ctx)return;if(next<ctx.currentTime-.15)next=ctx.currentTime+.025;let tr=tracks[current],pace=1+Math.min(.12,(window.VexState?.getLikes()||0)/15000);while(next<ctx.currentTime+.16){schedule(next,step++);next+=60/tr.bpm/4/pace;}}
+function selectGame(g){selectedGame=g;let v=$("track").value;current=v==="auto"?g:Number(v);step=0;}
+async function toggle(){if(playing){playing=false;clearInterval(clock);clock=null;master.gain.setTargetAtTime(0,ctx.currentTime,.025);$("beat").textContent="Müziği başlat";return;}try{$("audio").pause();init();await ctx.resume();selectGame(window.VexState?.getGame()||0);vol();playing=true;next=ctx.currentTime+.04;clock=setInterval(tick,45);tick();$("beat").textContent="Müziği durdur";}catch(e){window.VexState?.notify("Ses motoru başlatılamadı.");}}
+$("track").onchange=()=>selectGame(selectedGame);$("volume").oninput=vol;$("beat").onclick=toggle;$("stageMusic").onclick=toggle;$("audio").addEventListener("play",()=>{if(playing)toggle();});window.VexMusic={selectGame};
+})();
